@@ -4,10 +4,11 @@ import sys
 from decimal import Decimal
 from typing import Dict
 import pytest
-sys.path.insert(0,
-                os.path.join(os.path.dirname(os.path.abspath("__file__")),
-                             "src"))
-from receipts import POS, StockType, SaleType, Receipt
+#sys.path.insert(0,
+#                os.path.join(os.path.dirname(os.path.abspath("__file__")),
+#                             "src"))
+#from receipts import POS, StockType, SaleType, Receipt
+from ..receipts import POS, StockType, SaleType, Receipt
 
 @pytest.fixture(scope='module')
 def shop_inventory() -> Dict[str, StockType]:
