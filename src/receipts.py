@@ -1,0 +1,100 @@
+""" Receipt Total Generation Kata
+    (https://github.com/PillarTechnology/kata-checkout-order-total)
+
+    Requires Python 3.7 to run
+"""
+from collections import defaultdict
+from typing import Callable, Union, List, Dict, Any, NamedTuple
+from enum import Enum
+from dataclasses import dataclass, field
+from decimal import Decimal, ROUND_UP
+
+class SaleType(Enum):
+    """ Ways to measure how much product is sold """
+    EACH = 0  # Sold as an integral number of items
+    BY_WT = 1 # Sold by weight as measured by a scale
+
+# type aliases
+SaleQuantity = Union[int, float]
+Sales = List[SaleQuantity]
+Money = Decimal
+
+class StockType(NamedTuple):
+    "Information about a stocked item"
+    price: SaleQuantity # "price per unit for the item"
+    how_sold: SaleType # enum, EACH or BY_WT
+    pricing: Callable[[Any, SaleQuantity], Money] # function that takes a
+        # quantity and returns the price for that quantity of the item.
+
+    ###############################
+    # ways of calculating a price #
+    ###############################
+    def standard(self, qty: SaleQuantity) -> Money:
+        """ Calculate a standard, non-special price """
+        # TODO: throw NotImplementedError if
+        # how_sold and quantity are not compatible.
+        return (Money(self.price * qty).quantize(Decimal('.01'),
+                                                 rounding=ROUND_UP))
+
+@dataclass
+class Scan:
+    "Information about an item on the receipt"
+    item_desc: str  # Name given to the item, send from a scanner
+    qty: Sales = field(default_factory=list) # List of Number of items
+                    # or weight of item on a line of the receipt. qty will
+                    # be an int if item is sold by count, a float if
+                    # sold by weight
+
+
+class POS:
+    """ A class representing the outside environment that the receipt
+        calculation runs within.  Creates the universe of items upon
+        initialization.  Scans items and returns information about the
+        item.
+    """
+
+    def __init__(self,
+                 stock_items: Dict[str, StockType]) -> None:
+        """ Initializes the database of items that are stocked. """
+        self.stock_items = stock_items
+
+    def scan(self, item: str) -> StockType:
+        """ Look up the item and return its StockType data.
+            May throw a dictionary look-up exception if item
+            is not in the stock_items dictionary.
+        """
+        return self.stock_items[item]
+
+class Receipt:
+    """ This object manages items that are on the receipt. It adds items
+        (purchases list) to the receipt and calculates the total spent.  The
+        items are held in a dictionary indexed by the item with the value being
+        a list of item quantities.
+    """
+    def __init__(self, pos: POS) -> None:
+        # what can be purchased
+        self.pos = pos
+        # what has been purchased
+        self.purchases: Dict[StockType, Sales] = defaultdict(list)
+
+    def __iadd__(self, item_desc: str):
+        """ Define the += operator to add a scan of an item
+            to the receipt.
+        """
+        self.add_scan(item_desc, 1)
+        return self
+
+    def add_scan(self, item_desc: str, qty: SaleQuantity) -> None:
+        """ Add a quantity of an item to the receipt. Will raise a
+            KeyError if the item_desc is not in the inventory.
+        """
+        self.purchases[self.pos.scan(item_desc)].append(qty)
+
+    def total(self) -> Money:
+        "total up the order, returning the price"
+        rcp_total = Money(0.00)
+        for purchased_item in self.purchases:
+            rcp_total += purchased_item.pricing(
+                purchased_item,
+                sum(self.purchases[purchased_item]))
+        return rcp_total
