@@ -26,12 +26,22 @@ class StockType(NamedTuple):
     pricing: Callable[[Any, SaleQuantity], Money] # function that takes a
         # quantity and returns the price for that quantity of the item.
 
+    def check_qty(self, qty: SaleQuantity) -> None:
+        """ raise an error if the numeric type of the quantity is not 
+            consistent with the way the item is sold.
+        """
+        if isinstance(qty, float) and self.how_sold == SaleType.EACH:
+            raise NotImplementedError("Quantity sold must be an int "
+                "when the item is sold by count.")
+        if isinstance(qty, int) and self.how_sold == SaleType.BY_WT:
+            raise NotImplementedError("Quantity sold must be a real "
+                "when the item is sold by weight.")
+
     ###############################
     # ways of calculating a price #
     ###############################
     def standard(self, qty: SaleQuantity) -> Money:
         """ Calculate a standard, non-special price """
-        # TODO: throw NotImplementedError if
         # how_sold and quantity are not compatible.
         return (Money(self.price * qty).quantize(Decimal('.01'),
                                                  rounding=ROUND_UP))
@@ -88,7 +98,9 @@ class Receipt:
         """ Add a quantity of an item to the receipt. Will raise a
             KeyError if the item_desc is not in the inventory.
         """
-        self.purchases[self.pos.scan(item_desc)].append(qty)
+        stock_type: StockType = self.pos.scan(item_desc)
+        stock_type.check_qty(qty)
+        self.purchases[stock_type].append(qty)
 
     def total(self) -> Money:
         "total up the order, returning the price"

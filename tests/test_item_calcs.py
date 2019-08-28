@@ -56,3 +56,15 @@ def test_standard_weighed_single(receipt) -> None:
 
     # check the total
     assert receipt.total() == Decimal('1.99') * Decimal('3.0')
+
+
+def test_bad_qty_on_standard(receipt) -> None:
+    """ Test that adding a weight for a counted item or a
+        count for a weighed item throws the proper exception.
+    """
+    with pytest.raises(NotImplementedError):
+        # weighed item with a count
+        receipt.add_scan("15%FAT GRD CHUCK", 1)
+    with pytest.raises(NotImplementedError):
+        # counted item with a weight
+        receipt.add_scan("CAMP SOUP 10.75z", 1.5)
