@@ -8,10 +8,16 @@ from ..receipts import POS, StockType, SaleType, Receipt
 
 @pytest.fixture(scope='module')
 def shop_inventory() -> Dict[str, StockType]:
-    "shared test info, the inventory carried in the store."
+    "shared test info, the inventory carried by the store."
     return {
         "CAMP SOUP 10.75z": StockType(1.99, SaleType.EACH, StockType.standard),
         "15%FAT GRD CHUCK": StockType(1.99, SaleType.BY_WT, StockType.standard),
+        "DOZ JNSTN SAUSAG": StockType(4.99, SaleType.EACH,
+                                      StockType.cents_off(.45)),
+        "2.0L CANFLD SELZ": StockType(1.99, SaleType.EACH,
+                                      StockType.cents_off(.25)),
+        "BANANAS DELMONTE": StockType(0.28, SaleType.BY_WT,
+                                      StockType.cents_off(.08)),
     }
 
 
@@ -68,3 +74,24 @@ def test_bad_qty_on_standard(receipt) -> None:
     with pytest.raises(NotImplementedError):
         # counted item with a weight
         receipt.add_scan("CAMP SOUP 10.75z", 1.5)
+
+
+def test_price_off_special_items(receipt) -> None:
+    """ Calculate the proper price for special items. """
+    # add a discounted item to the receipt
+    receipt += "2.0L CANFLD SELZ"
+    # add another discounted item to the receipt
+    receipt += "DOZ JNSTN SAUSAG"
+
+    # check the total
+    assert receipt.total() == (Decimal('1.99') - Decimal('.25') +
+                               Decimal('4.99') - Decimal('.45'))
+
+
+def test_price_off_special_weighed(receipt) -> None:
+    """ Calculate the proper price for special items. """
+    # add a discounted item to the receipt
+    receipt.add_scan("BANANAS DELMONTE", 3.5)
+
+    # check the total
+    assert receipt.total() == Decimal('0.70')

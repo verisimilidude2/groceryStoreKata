@@ -4,9 +4,10 @@
     Requires Python 3.7 to run
 """
 from collections import defaultdict
-from typing import Callable, Union, List, Dict, Any, NamedTuple
+from typing import Callable, Union, List, Dict, Any, NamedTuple, Type
 from enum import Enum
 from dataclasses import dataclass, field
+from functools import partial
 from decimal import Decimal, ROUND_UP
 
 class SaleType(Enum):
@@ -42,9 +43,21 @@ class StockType(NamedTuple):
     ###############################
     def standard(self, qty: SaleQuantity) -> Money:
         """ Calculate a standard, non-special price """
-        # how_sold and quantity are not compatible.
         return (Money(self.price * qty).quantize(Decimal('.01'),
                                                  rounding=ROUND_UP))
+
+    @classmethod
+    def cents_off(cls: Type['StockType'], amount_off: float) -> \
+                  Callable[[Any, SaleQuantity], Money]:
+        """ Returns a function that takes a quantity and returns the
+            price with a per-item price-off reduction.
+        """
+        def cents_off_calc(self, qty: int, discount: Money):
+            "inline function that actually does the calculation"
+            return (Money((self.price - amount_off) * qty).
+                          quantize(Decimal('.01')))
+        return partial(cents_off_calc, discount=amount_off)
+            
 
 @dataclass
 class Scan:
