@@ -57,7 +57,46 @@ class StockType(NamedTuple):
             return (Money((self.price - amount_off) * qty).
                           quantize(Decimal('.01')))
         return partial(cents_off_calc, discount=amount_off)
-            
+ 
+
+    @classmethod
+    def conditional_percent_off(cls: Type['StockType'], min_items: int,
+                                disc_items: int, pct_off: float) -> \
+                                Callable[[Any, SaleQuantity], Money]:
+        """ Returns a function that implements 'Buy N items get M at %X off'
+            pricing specials.
+            TODO: ask customer if this type of discount ever applies to
+            weighed items
+        """
+        def conditional_percent_off_calc(self, qty: int, min_items: int,
+                                         disc_items: int, pct_off: int):
+            "inline function that actually does the calculation"
+            grp = min_items + disc_items # max number of items in a dsct group
+            disc_qty = (((qty//grp) * disc_items) +
+                        max((qty % grp) - min_items, 0))
+            full_qty = qty - disc_qty
+
+            return (Money(self.price * full_qty).  # items with no discount
+                          quantize(Decimal('.01')) +
+                    # plus items that are discounted
+                    Money((self.price * (1.0 - pct_off/100.0)) * disc_qty).
+                          quantize(Decimal('.01')))
+
+        # ask customer if they want these common sense constraints. Not in the
+        # Use Cases but calculations may not be valid outside these ranges.
+        if pct_off <= 0 or pct_off > 100:
+            raise NotImplementedError(f"Cannot have a discount percentage "
+                "that is 0% or less or more than 100%, got {pct_off}")
+        if min_items < 1:
+            raise NotImplementedError(f"Cannot have a discount where one "
+                "must buy less than one item, got {min_items}")
+        if disc_items < 1:
+            raise NotImplementedError(f"Cannot have a discount where the "
+                "number of items discounted is less than one, got {min_items}")
+        
+        return partial(conditional_percent_off_calc, min_items=min_items,
+                       disc_items=disc_items, pct_off=pct_off)
+
 
 @dataclass
 class Scan:

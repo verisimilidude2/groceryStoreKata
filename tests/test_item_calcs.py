@@ -18,6 +18,16 @@ def shop_inventory() -> Dict[str, StockType]:
                                       StockType.cents_off(.25)),
         "BANANAS DELMONTE": StockType(0.28, SaleType.BY_WT,
                                       StockType.cents_off(.08)),
+        # Buy one, get on free on hydroponic bib lettuce
+        "BIB LETTUCE HDRP": StockType(1.99, SaleType.EACH,
+                                      StockType.conditional_percent_off(
+                                          min_items=1, disc_items=1,
+                                          pct_off=100)),
+        # Buy two get one half off on 1 liter coke
+        "COKE CLASIC 1.Ol": StockType(1.29, SaleType.EACH,
+                                      StockType.conditional_percent_off(
+                                          min_items=2, disc_items=1,
+                                          pct_off=50)),
     }
 
 
@@ -95,3 +105,24 @@ def test_price_off_special_weighed(receipt) -> None:
 
     # check the total
     assert receipt.total() == Decimal('0.70')
+
+
+def test_price_buy1get1(receipt) -> None:
+    receipt += "BIB LETTUCE HDRP"
+    # check the total
+    assert receipt.total() == Decimal('1.99')
+    # buy another
+    receipt += "BIB LETTUCE HDRP"
+    # check the total, should be the same
+    assert receipt.total() == Decimal('1.99')
+    # buy a third
+    receipt += "BIB LETTUCE HDRP"
+    # check that the total has increased
+    assert receipt.total() == Decimal('3.98')
+
+
+def test_price_buy2get1half_off(receipt) -> None:
+    # buy four on a buy two get one half off
+    receipt.add_scan("COKE CLASIC 1.Ol", 4)
+    # results in three full price and one half price
+    assert receipt.total() == Decimal(1.29 * 3.5). quantize(Decimal('.01'))
