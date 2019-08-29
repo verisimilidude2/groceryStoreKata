@@ -28,6 +28,9 @@ def shop_inventory() -> Dict[str, StockType]:
                                       StockType.conditional_percent_off(
                                           min_items=2, disc_items=1,
                                           pct_off=50)),
+        # 25 cents off, limit 6
+        "FNCYFST CATFD 3z": StockType(1.25, SaleType.EACH,
+                                      StockType.cents_off(.25, limit=6)),
     }
 
 
@@ -126,3 +129,11 @@ def test_price_buy2get1half_off(receipt) -> None:
     receipt.add_scan("COKE CLASIC 1.Ol", 4)
     # results in three full price and one half price
     assert receipt.total() == Decimal(1.29 * 3.5). quantize(Decimal('.01'))
+
+
+def test_discount_with_limit(receipt) -> None:
+    receipt.add_scan("FNCYFST CATFD 3z", 7)
+    # six discounted and one full price
+    assert receipt.total() == Decimal('7.25')
+
+

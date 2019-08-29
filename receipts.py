@@ -4,7 +4,7 @@
     Requires Python 3.7 to run
 """
 from collections import defaultdict
-from typing import Callable, Union, List, Dict, Any, NamedTuple, Type
+from typing import Callable, Union, List, Dict, Any, NamedTuple, Type, Tuple
 from enum import Enum
 from dataclasses import dataclass, field
 from functools import partial
@@ -28,7 +28,7 @@ class StockType(NamedTuple):
         # quantity and returns the price for that quantity of the item.
 
     def check_qty(self, qty: SaleQuantity) -> None:
-        """ raise an error if the numeric type of the quantity is not 
+        """ raise an error if the numeric type of the quantity is not
             consistent with the way the item is sold.
         """
         if isinstance(qty, float) and self.how_sold == SaleType.EACH:
@@ -37,6 +37,36 @@ class StockType(NamedTuple):
         if isinstance(qty, int) and self.how_sold == SaleType.BY_WT:
             raise NotImplementedError("Quantity sold must be a real "
                 "when the item is sold by weight.")
+
+    def handle_limit(self,
+                     disc_limit: int, # max number of products to be discounted
+                     cur_disc: int,  # number currently discounted
+                     cur_full: int  # number currently full price
+                    ) -> Tuple[int,int]:
+        """ This method checks the current number of full price and
+            discounted items against a limit for the number eligible
+            for a discount and returns (possibly) adjusted discount
+            and full price counts.
+
+            For example:
+                "buy 2, get 1 free, limit 6" and 10 have been scanned.
+                The discount limit would be 2 (== 6//(2+1) )
+                cur_disc would be 3 and cur_full would be 7.
+                Since 3 > 2 we are past the limit and all later
+                items should be full price.
+                This routine will return a discounted count of 2 and
+                a full price count of 8.
+        """
+        # short circuit if there is no limit
+        if not disc_limit:
+            return(cur_disc, cur_full)
+        disc = cur_disc # number to sell at discout
+        full = cur_full # number to sell at full price
+        if cur_disc > disc_limit:
+            disc = disc_limit
+            full = (cur_disc + cur_full) - disc
+        return (disc, full)
+
 
     ###############################
     # ways of calculating a price #
@@ -47,17 +77,20 @@ class StockType(NamedTuple):
                                                  rounding=ROUND_UP))
 
     @classmethod
-    def cents_off(cls: Type['StockType'], amount_off: float) -> \
+    def cents_off(cls: Type['StockType'], amount_off: float,
+                  limit:int=None) -> \
                   Callable[[Any, SaleQuantity], Money]:
         """ Returns a function that takes a quantity and returns the
             price with a per-item price-off reduction.
         """
-        def cents_off_calc(self, qty: int, discount: Money):
+        def cents_off_calc(self, qty: int, discount: Money, limit:int):
             "inline function that actually does the calculation"
-            return (Money((self.price - amount_off) * qty).
+            (disc, full) = self.handle_limit(limit, qty, 0)
+            return ((Money((self.price - amount_off) * disc)) +
+                    (Money(self.price * full)).
                           quantize(Decimal('.01')))
-        return partial(cents_off_calc, discount=amount_off)
- 
+        return partial(cents_off_calc, discount=amount_off, limit=limit)
+
 
     @classmethod
     def conditional_percent_off(cls: Type['StockType'], min_items: int,
@@ -93,7 +126,7 @@ class StockType(NamedTuple):
         if disc_items < 1:
             raise NotImplementedError(f"Cannot have a discount where the "
                 "number of items discounted is less than one, got {min_items}")
-        
+
         return partial(conditional_percent_off_calc, min_items=min_items,
                        disc_items=disc_items, pct_off=pct_off)
 
@@ -148,7 +181,9 @@ class Receipt:
 
     def add_scan(self, item_desc: str, qty: SaleQuantity) -> None:
         """ Add a quantity of an item to the receipt. Will raise a
-            KeyError if the item_desc is not in the inventory.
+            KeyError if the item_desc is not in the inventory or
+            NotImplementedError if the quantity does not match how the
+            item is sold (e.g. a weight for a product sold by item count).
         """
         stock_type: StockType = self.pos.scan(item_desc)
         stock_type.check_qty(qty)
@@ -161,4 +196,4 @@ class Receipt:
             rcp_total += purchased_item.pricing(
                 purchased_item,
                 sum(self.purchases[purchased_item]))
-        return rcp_total
+        return rcp_total.quantize(Decimal('.01'))
