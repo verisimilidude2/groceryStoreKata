@@ -6,6 +6,38 @@ from typing import Dict
 import pytest
 from ..receipts import POS, StockType, SaleType, Receipt
 
+def test_bad_stock_types():
+    """ Test the various ways creation of a StockType may fail """
+    #  pct_off <= 0
+    with pytest.raises(NotImplementedError):
+        badStock = StockType(0.28, SaleType.BY_WT,
+                             StockType.conditional_percent_off(
+                                 min_items=2, disc_items=1, pct_off=-100))
+    #  pct_off > 100:
+    with pytest.raises(NotImplementedError):
+        badStock = StockType(0.28, SaleType.BY_WT,
+                             StockType.conditional_percent_off(
+                                 min_items=2, disc_items=1, pct_off=110))
+    # min_items < 1:
+    with pytest.raises(NotImplementedError):
+        badStock = StockType(0.28, SaleType.BY_WT,
+                             StockType.conditional_percent_off(
+                                 min_items=0, disc_items=1,
+                                 pct_off=100))
+    # disc_items < 1:
+    with pytest.raises(NotImplementedError):
+        badStock = StockType(0.28, SaleType.BY_WT,
+                             StockType.conditional_percent_off(
+                                 min_items=1, disc_items=0,
+                                 pct_off=100))
+    # limit < (min_items + disc_items):
+    with pytest.raises(NotImplementedError):
+        badStock = StockType(0.28, SaleType.BY_WT,
+                             StockType.conditional_percent_off(
+                                 min_items=1, disc_items=0,
+                                 pct_off=100, limit=1))
+
+
 @pytest.fixture(scope='module')
 def shop_inventory() -> Dict[str, StockType]:
     "shared test info, the inventory carried by the store."
@@ -40,7 +72,9 @@ def shop_inventory() -> Dict[str, StockType]:
                                           min_items=1, disc_items=1,
                                           pct_off=100, limit=6)),
 
-        #"PROGRESSO TRADIT": StockType(1.25, SaleType.EACH,
+        # probably bad, discount greater than base price.
+        "PROGRESSO TRADI": StockType(1.25, SaleType.EACH,
+                                     StockType.cents_off(1.45)),
     }
 
 
@@ -151,3 +185,9 @@ def test_buy1get1_with_limit(receipt) -> None:
     receipt.add_scan("ETERNAL WTR 600M", 12)
     # three full price, three free, then six more full price
     assert receipt.total() == Decimal('9.00')
+
+
+def test_discount_greater_than_price(receipt) -> None:
+    """ Test that a product with a discount greater than the price is free """
+    receipt.add_scan("PROGRESSO TRADI", 1)
+    assert receipt.total() == Decimal('0.00')

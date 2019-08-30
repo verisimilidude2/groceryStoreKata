@@ -86,9 +86,18 @@ class StockType(NamedTuple):
         def cents_off_calc(self, qty: int, discount: Money, limit:int):
             "inline function that actually does the calculation"
             (disc, full) = self.handle_limit(limit, qty, 0)
-            return ((Money((self.price - amount_off) * disc)) +
-                    (Money(self.price * full)).
-                          quantize(Decimal('.01')))
+            if discount <= self.price:
+                return ((Money((self.price - discount) * disc)) +
+                        (Money(self.price * full)).
+                              quantize(Decimal('.01')))
+            else:
+                return (Money(self.price * full).
+                              quantize(Decimal('.01')))
+
+        # ask customer if they want these common sense constraints. Not in the
+        # Use Cases but calculations may not be valid outside these ranges.
+        if amount_off <= 0.0:
+            raise NotImplementedError(f"Cannot have discount of zero or less")
 
         # return function with items set in store's stock definition bound
         return partial(cents_off_calc, discount=amount_off, limit=limit)
