@@ -31,6 +31,16 @@ def shop_inventory() -> Dict[str, StockType]:
         # 25 cents off, limit 6
         "FNCYFST CATFD 3z": StockType(1.25, SaleType.EACH,
                                       StockType.cents_off(.25, limit=6)),
+        #"TWO BRTS WBL 6PK": StockType(1.25, SaleType.EACH,
+        #"2 QTY DSPSBL BAG": StockType(1.25, SaleType.EACH,
+
+        # buy one get one free, limit six
+        "ETERNAL WTR 600M": StockType(1.00, SaleType.EACH,
+                                      StockType.conditional_percent_off(
+                                          min_items=1, disc_items=1,
+                                          pct_off=100, limit=6)),
+
+        #"PROGRESSO TRADIT": StockType(1.25, SaleType.EACH,
     }
 
 
@@ -137,3 +147,7 @@ def test_discount_with_limit(receipt) -> None:
     assert receipt.total() == Decimal('7.25')
 
 
+def test_buy1get1_with_limit(receipt) -> None:
+    receipt.add_scan("ETERNAL WTR 600M", 12)
+    # three full price, three free, then six more full price
+    assert receipt.total() == Decimal('9.00')

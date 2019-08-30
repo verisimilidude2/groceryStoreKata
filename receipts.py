@@ -89,12 +89,15 @@ class StockType(NamedTuple):
             return ((Money((self.price - amount_off) * disc)) +
                     (Money(self.price * full)).
                           quantize(Decimal('.01')))
+
+        # return function with items set in store's stock definition bound
         return partial(cents_off_calc, discount=amount_off, limit=limit)
 
 
     @classmethod
     def conditional_percent_off(cls: Type['StockType'], min_items: int,
-                                disc_items: int, pct_off: float) -> \
+                                disc_items: int, pct_off: float,
+                                limit: int=None) -> \
                                 Callable[[Any, SaleQuantity], Money]:
         """ Returns a function that implements 'Buy N items get M at %X off'
             pricing specials.
@@ -102,12 +105,18 @@ class StockType(NamedTuple):
             weighed items
         """
         def conditional_percent_off_calc(self, qty: int, min_items: int,
-                                         disc_items: int, pct_off: int):
+                                         disc_items: int, pct_off: int,
+                                         limit: int):
             "inline function that actually does the calculation"
             grp = min_items + disc_items # max number of items in a dsct group
             disc_qty = (((qty//grp) * disc_items) +
                         max((qty % grp) - min_items, 0))
             full_qty = qty - disc_qty
+            # calculate max number of discounted items (pythonic ternary)
+            disc_limit = limit and limit // grp
+            # adjust discounted count when there is a limit
+            disc_qty, full_qty = self.handle_limit(disc_limit,
+                                                   disc_qty, full_qty)
 
             return (Money(self.price * full_qty).  # items with no discount
                           quantize(Decimal('.01')) +
@@ -126,9 +135,17 @@ class StockType(NamedTuple):
         if disc_items < 1:
             raise NotImplementedError(f"Cannot have a discount where the "
                 "number of items discounted is less than one, got {min_items}")
+        if limit and limit < (min_items + disc_items):
+            raise NotImplementedError(f"Cannot have a purchase limit where the "
+                "number of items needed to be purchased is less than the "
+                "purchase limit.  (e.g. 'buy 3 get 1 half off, limit 1' is "
+                "wrong, it should be limit 4 to limit to one discounted item. "
+                "Got limit={limit}, full price count={min_items}, discounted "
+                "count={disc_items}")
 
+        # return function with items set in store's stock definition bound
         return partial(conditional_percent_off_calc, min_items=min_items,
-                       disc_items=disc_items, pct_off=pct_off)
+                       disc_items=disc_items, pct_off=pct_off, limit=limit)
 
 
 @dataclass
