@@ -63,8 +63,11 @@ def shop_inventory() -> Dict[str, StockType]:
         # 25 cents off, limit 6
         "FNCYFST CATFD 3z": StockType(1.25, SaleType.EACH,
                                       StockType.cents_off(.25, limit=6)),
-        #"TWO BRTS WBL 6PK": StockType(1.25, SaleType.EACH,
-        #"2 QTY DSPSBL BAG": StockType(1.25, SaleType.EACH,
+        # buy 1 pound get 1 pound half off
+        "A1ALASKAN SALMON": StockType(3.00, SaleType.BY_WT,
+                                      StockType.conditional_percent_off(
+                                          min_items=1, disc_items=1,
+                                          pct_off=50)),
 
         # buy one get one free, limit six
         "ETERNAL WTR 600M": StockType(1.00, SaleType.EACH,
@@ -191,3 +194,48 @@ def test_discount_greater_than_price(receipt) -> None:
     """ Test that a product with a discount greater than the price is free """
     receipt.add_scan("PROGRESSO TRADI", 1)
     assert receipt.total() == Decimal('0.00')
+
+
+def test_removals(receipt) -> None:
+    """ Test that you can remove the last of a particular item type or
+        a given quantity of an item and total is still correct and still
+        honors specials.
+    """
+    # buy three on a buy two get one half off
+    receipt.add_scan("COKE CLASIC 1.Ol", 3)
+    # add another that should be full price
+    receipt += "COKE CLASIC 1.Ol"
+    # results in three full price and one half price
+    assert receipt.total() == Decimal(1.29 * 3.5). quantize(Decimal('.01'))
+    # buy something else
+    receipt += "BIB LETTUCE HDRP"
+    # check the total
+    assert receipt.total() == (Decimal('1.99') + Decimal(1.29 * 3.5).
+                               quantize(Decimal('.01')))
+    # add another lettuce since it is buy one get on free
+    receipt += "BIB LETTUCE HDRP"
+    # check that the total did not change
+    assert receipt.total() == (Decimal('1.99') + Decimal(1.29 * 3.5).
+                               quantize(Decimal('.01')))
+    # Remove the last Coke rung up since it was full price
+    receipt.remove_last("COKE CLASIC 1.Ol")
+    # check that the total went down by the full price coke's cost
+    assert receipt.total() == (Decimal('1.99') + Decimal(1.29 * 2.5).
+                               quantize(Decimal('.01')))
+    # remove both the bib lettuces and check total has only cokes
+    receipt.remove("BIB LETTUCE HDRP", 2)
+    assert receipt.total() == Decimal(1.29 * 2.5).quantize(Decimal('.01'))
+    # remove the bib lettuces again (mistake, they are already gone) and
+    # check that the total still has only cokes
+    receipt.remove("BIB LETTUCE HDRP", 2)
+    assert receipt.total() == Decimal(1.29 * 2.5).quantize(Decimal('.01'))
+    # remove things that are not on the receipt.  Should do nothing.
+    receipt.remove("PROGRESSO TRADI", 2)
+    receipt.remove("BIB LETTUCE HDRP", 2)
+    # check that the total still has only the three cokes
+    assert receipt.total() == Decimal(1.29 * 2.5).quantize(Decimal('.01'))
+
+def test_conditional_for_weighed_item(receipt) -> None:
+    # buy two pounds of 'buy 1 get 1 half off' product costing 3.00/lb
+    receipt.add_scan("A1ALASKAN SALMON", 2.0)
+    assert receipt.total() == Decimal(3.00 * 1.5).quantize(Decimal('.01'))

@@ -94,8 +94,8 @@ class StockType(NamedTuple):
                 return (Money(self.price * full).
                               quantize(Decimal('.01')))
 
-        # ask customer if they want these common sense constraints. Not in the
-        # Use Cases but calculations may not be valid outside these ranges.
+        # ask customer if they want this common sense constraint. Not in the
+        # Use Cases but calculations may not be valid with a negative reduction.
         if amount_off <= 0.0:
             raise NotImplementedError(f"Cannot have discount of zero or less")
 
@@ -110,8 +110,6 @@ class StockType(NamedTuple):
                                 Callable[[Any, SaleQuantity], Money]:
         """ Returns a function that implements 'Buy N items get M at %X off'
             pricing specials.
-            TODO: ask customer if this type of discount ever applies to
-            weighed items
         """
         def conditional_percent_off_calc(self, qty: int, min_items: int,
                                          disc_items: int, pct_off: int,
@@ -181,7 +179,7 @@ class POS:
 
     def scan(self, item: str) -> StockType:
         """ Look up the item and return its StockType data.
-            May throw a dictionary look-up exception if item
+            May throw a KeyError (dictionary look-up exception) if item
             is not in the stock_items dictionary.
         """
         return self.stock_items[item]
@@ -223,3 +221,22 @@ class Receipt:
                 purchased_item,
                 sum(self.purchases[purchased_item]))
         return rcp_total.quantize(Decimal('.01'))
+
+
+    def remove_last(self, item_desc: str) -> None:
+        """ Remove the last scan of the item named by item_desc. """
+        stock_type: StockType = self.pos.scan(item_desc)
+        self.purchases[stock_type] = self.purchases[stock_type][:-1]
+
+
+    def remove(self, item_desc: str, num2remove: SaleQuantity) -> None:
+        """ Remove up to num2remove items from the scans of item_desc. """
+        num_remaining: SaleQuantity = num2remove
+        stock_type: StockType = self.pos.scan(item_desc)
+        while len(self.purchases[stock_type]) > 0 and num_remaining > 0:
+            if self.purchases[stock_type][-1] > num_remaining:
+                self.purchases[stock_type][-1] -= num_remaining
+            else:
+                num_remaining -=  self.purchases[stock_type][-1]
+                self.remove_last(item_desc)
+
